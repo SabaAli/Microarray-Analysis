@@ -35,7 +35,6 @@ dim(dat) # There are 61 samples, and 22,283 genes
 #------------------------------------------#
 #           Removing Outliers
 #------------------------------------------#
-
 # Visualize Outliers
 library(gplots)
 dat.cor <- cor(dat)
@@ -62,10 +61,6 @@ source("https://bioconductor.org/biocLite.R")
 biocLite("affy")
 library(affy)
 
-# For filtering probesets, first take the CV of each row, then look at a histogram. 
-# The low CV probesets (set by some threshold you choose based on the histogram), would be the ones to filter out.
-# Look at bottom tail of histogram and remove genes from the x coefficient of variation. So those are genes with little variability. 
-
 log.dat  <- log2(dat)                  # log2 of data
 dat.mean <- apply(log.dat,1,mean)	     # calculate mean for each GENE 
 dat.sd   <- sqrt(apply(log.dat,1,var)) # calculate st.deviation for each GENE
@@ -87,6 +82,7 @@ filtered.genes <- dat.cv[dat.cv > q.25]
 length(filtered.genes) # 16,712 (from 22,283)
 filtered.genes <- as.data.frame(filtered.genes)
 filtered.dat   <- dat[rownames(filtered.genes),] # Subset dat by filtered genes
+
 dat <- filtered.dat
 dim(filtered.dat) # 16,712 by 56
 
@@ -94,14 +90,9 @@ dim(filtered.dat) # 16,712 by 56
 #------------------------------------------#
 #           Feature Selection
 #------------------------------------------#
-# Conduct some method of feature selection with a statistical test or other machine learning method (ANOVA, T-test, Wilcox, etc.)
-# Provide the # of genes retained with the associated score (p-value, weight, test statistic, etc.) and threshold value that you used.  
-# Plot the scores of those genes retained in a histogram.  
-
 cl <- colnames(dat)
 control <- cl[1:30]
 bipolar <- cl[31:56]
-
 
 # Function to calculate Student’s two-sample t-test on all genes at once
 # Returns the p-value for the test
@@ -116,9 +107,7 @@ t.test.all.genes <- function(x,s1,s2){
 }
 
 dat.log <- log2(dat)
-dat.log
 t.test.run <- apply(dat.log, 1, t.test.all.genes, s1 = control, s2 = bipolar)
-t.test.run
 
 # Histogram of P-values from Student's T-Test (Without Feature Selection)
 hist(t.test.run, 
@@ -126,7 +115,6 @@ hist(t.test.run,
      main="Histogram of P-values using a Student's t-test \n Bipolar Disorder Study",
      col="lightblue",
      cex.main = 0.9)
-
 
 sum(t.test.run<0.05) # 1140 probesets (# of genes) with p < 0.05 (threshold)
 p.05 <- t.test.run[t.test.run<0.05] # retained genes with p<0.05 with associated p-values
@@ -136,20 +124,9 @@ hist(p.05,
      col="lightgreen",
      cex.main = 0.9)
 
-#sum(t.test.run<0.01) # 300 probesets (# of genes) with p < 0.01 (threshold)
-#p.01 <- t.test.run[t.test.run<0.01] # retained genes with p<0.01 with associated p-values
-#hist(p.01, 
-#     xlab= "p-values",
-#     main="Histogram of P-values < 0.01 using a Student's t-test \n Bipolar Disorder Study",
-#     col="lightyellow",
-#     cex.main = 0.9)
-
 #------------------------------------------#
 #    Clustering/Dimensionality Reduction
 #------------------------------------------#
-# Next, subset your data by the genes that you determined and 
-# use one of the clustering or DR methods discussed in class to visualize the samples in 2-D space (xy scatter plot, dendrogram, etc.). 
-
 # Subset data by genes determined
 length(p.05)
 p.05 <- as.data.frame(p.05)
@@ -170,48 +147,34 @@ points(PC1[disease.state == "control"], PC2[disease.state == "control"], col=1, 
 points(PC1[disease.state == "bipolar"], PC2[disease.state == "bipolar"], col=1, bg = "red", pch=21, cex=1.5) 
 legend("bottomright", legend = c("control","bipolar"), pch = 19, col = c("black","red"))  
 
-
 # Calculate and plot the scree plot that corresponds to the PCA 
-# Using only the first two eigenvalues, approximately how much variability in the data is explained?
 dat.pca.var <- round(dat.pca$sdev^2 / sum(dat.pca$sdev^2)*100,2)
 plot(c(1:length(dat.pca.var)),
      dat.pca.var,
      type="b",xlab="# Components",ylab="% Variance",pch=21,col=1,bg=3,cex=1.5)
 title("Scree plot showing % variability \nexplained by each eigenvalue\nBipolar dataset")
 
-# There is approximately 50% of the variability in the data explained by PC1 and PC2.
-
 #------------------------------------------#
 #               Classification
 #------------------------------------------#
-# Using these linear projections of the original data (i.e. cluster centroids, principal components, latent variables, etc.), 
-# Use a classification method to classify the samples into their respective classes.  
-# Make sure to color the samples appropriately by their predicted class membership & use different symbols for the actual class memberships.
 library(MASS)
-#dat.pca
-# t.selected.dat <- t(selected.dat)      # selected data
 linear.projection <- dat.pca$x[,1:2] # pca data
-dim(linear.projection) # 56 x 2
 
+# First 15 samples of control, first 15 samples of bipolar
 train.set <- as.data.frame(rbind(linear.projection[1:15,], linear.projection[33:47,])) # First 15 samples of control, first 15 samples of bipolar
 test.set  <- as.data.frame(linear.projection[!(rownames(linear.projection) %in% rownames(train.set)),])
 dim(train.set) # 30 x 2
 
-
-
 # LDA
 train.names <- rownames(train.set)
 train.names <- factor(gsub('GSM[[:digit:]]+_', '', train.names))
-train.names
 
 test.names  <- rownames(test.set)
 test.names  <- factor(gsub('GSM[[:digit:]]+_', '', test.names))
-test.names
 
 lda.train   <- lda(train.names~., train.set)
 out         <- predict(lda.train, test.set)
 table(out$class,test.names) # confusion matrix
-
 
 plot(out$x,
      xlab="LD1",ylab="LD2",main="Discriminant function for \nBipolar Dataset",
@@ -248,4 +211,3 @@ rownames(neg.identifier) <- neg.id
 
 pos.identifier
 neg.identifier
-
